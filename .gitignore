@@ -395,3 +395,5 @@ Thumbs.db
 .idea/
 
 .version
+sbom/
+zap-reports/

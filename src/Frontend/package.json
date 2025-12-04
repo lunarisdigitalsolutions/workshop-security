@@ -1,0 +1,12 @@
+{
+  "name": "@lunarisdigitalsolutions/security-frontend",
+  "version": "1.0.0",
+  "description": "Pizza Shop Frontend",
+  "scripts": {
+    "start": "npx -y http-server -p 4200"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "private": true
+}

@@ -1,3 +1,6 @@
+using WebApi.Models;
+using WebApi.Services;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
@@ -9,7 +12,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-builder.Services.AddSingleton<BasketStore>();
+builder.Services.AddSingleton<IBasketStore, InMemoryBasketStore>();
 
 var app = builder.Build();
 
@@ -19,7 +22,19 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseCors();
+app.UseCors(c => c.AllowAnyHeader().AllowAnyMethod().WithOrigins("http://localhost:4200"));
+
+var securityHeadersPolicies = new HeaderPolicyCollection()
+    .AddDefaultSecurityHeaders()
+    .AddContentSecurityPolicy(builder =>
+    {
+        builder.AddDefaultSrc().Self();
+        builder.AddStyleSrc().Self().UnsafeInline();
+        builder.AddFontSrc().Self();
+        builder.AddImgSrc().Self().Data();
+        builder.AddScriptSrc().Self().UnsafeInline();
+    });
+app.UseSecurityHeaders(securityHeadersPolicies);
 
 // Pizza data
 var pizzas = new List<Pizza>
@@ -54,12 +69,7 @@ var pizzas = new List<Pizza>
         "Spicy salami pizza with hot peppers",
         ["Tomato Sauce", "Mozzarella", "Spicy Salami", "Hot Peppers"]
     ),
-    new Pizza(
-        6,
-        "Prosciutto e Funghi",
-        "Ham and mushroom pizza",
-        ["Tomato Sauce", "Mozzarella", "Ham", "Mushrooms"]
-    ),
+    new Pizza(6, "Prosciutto e Funghi", "Ham and mushroom pizza", ["Tomato Sauce", "Mozzarella", "Ham", "Mushrooms"]),
 };
 
 // Pizza endpoints
@@ -79,10 +89,12 @@ app.MapGet(
 // Basket endpoints
 app.MapPost(
         "/basket/items",
-        (BasketStore store, AddBasketItemRequest request) =>
+        (IBasketStore store, AddBasketItemRequest request) =>
         {
             if (pizzas.All(p => p.Id != request.PizzaId))
+            {
                 return Results.NotFound("Pizza not found");
+            }
 
             store.AddItem(request.PizzaId, request.Quantity);
             return Results.Ok(store.GetBasket());
@@ -93,10 +105,12 @@ app.MapPost(
 
 app.MapPut(
         "/basket/items/{pizzaId}",
-        (BasketStore store, int pizzaId, UpdateBasketItemRequest request) =>
+        (IBasketStore store, int pizzaId, UpdateBasketItemRequest request) =>
         {
             if (!store.UpdateQuantity(pizzaId, request.Quantity))
+            {
                 return Results.NotFound("Pizza not in basket");
+            }
 
             return Results.Ok(store.GetBasket());
         }
@@ -106,10 +120,12 @@ app.MapPut(
 
 app.MapDelete(
         "/basket/items/{pizzaId}",
-        (BasketStore store, int pizzaId) =>
+        (IBasketStore store, int pizzaId) =>
         {
             if (!store.RemoveItem(pizzaId))
+            {
                 return Results.NotFound("Pizza not in basket");
+            }
 
             return Results.Ok(store.GetBasket());
         }
@@ -117,17 +133,17 @@ app.MapDelete(
     .WithName("RemoveFromBasket")
     .WithOpenApi();
 
-app.MapGet("/basket", (BasketStore store) => Results.Ok(store.GetBasket()))
-    .WithName("GetBasket")
-    .WithOpenApi();
+app.MapGet("/basket", (IBasketStore store) => Results.Ok(store.GetBasket())).WithName("GetBasket").WithOpenApi();
 
 app.MapPost(
         "/basket/confirm",
-        (BasketStore store) =>
+        (IBasketStore store) =>
         {
             var basket = store.GetBasket();
             if (basket.Items.Count == 0)
+            {
                 return Results.BadRequest("Basket is empty");
+            }
 
             var orderId = Guid.NewGuid();
             store.Clear();
@@ -137,57 +153,4 @@ app.MapPost(
     .WithName("ConfirmOrder")
     .WithOpenApi();
 
-app.Run();
-
-// Models
-record Pizza(int Id, string Name, string Description, string[] Ingredients);
-
-record AddBasketItemRequest(int PizzaId, int Quantity);
-
-record UpdateBasketItemRequest(int Quantity);
-
-record BasketItem(int PizzaId, int Quantity);
-
-record Basket(List<BasketItem> Items);
-
-// In-memory basket store
-class BasketStore
-{
-    private readonly Dictionary<int, int> _items = new();
-
-    public void AddItem(int pizzaId, int quantity)
-    {
-        if (_items.ContainsKey(pizzaId))
-            _items[pizzaId] += quantity;
-        else
-            _items[pizzaId] = quantity;
-    }
-
-    public bool UpdateQuantity(int pizzaId, int quantity)
-    {
-        if (!_items.ContainsKey(pizzaId))
-            return false;
-
-        if (quantity <= 0)
-            _items.Remove(pizzaId);
-        else
-            _items[pizzaId] = quantity;
-
-        return true;
-    }
-
-    public bool RemoveItem(int pizzaId)
-    {
-        return _items.Remove(pizzaId);
-    }
-
-    public Basket GetBasket()
-    {
-        return new Basket(_items.Select(kvp => new BasketItem(kvp.Key, kvp.Value)).ToList());
-    }
-
-    public void Clear()
-    {
-        _items.Clear();
-    }
-}
+await app.RunAsync().ConfigureAwait(false);

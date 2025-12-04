@@ -1,0 +1,32 @@
+@startuml Architecture
+
+!define RECTANGLE rectangle
+
+skinparam rectangle {
+    BackgroundColor<<frontend>> LightBlue
+    BackgroundColor<<api>> LightGreen
+}
+
+title System Architecture
+
+actor User
+
+rectangle "Frontend" <<frontend>> as frontend {
+    [Web Application]
+    [Mobile App]
+}
+
+rectangle "API Layer" <<api>> as api {
+    [REST API]
+    [Authentication Service]
+}
+
+database "Database" {
+    [Data Store]
+}
+
+User --> frontend : "Uses"
+frontend --> api : "HTTP/HTTPS"
+api --> [Data Store] : "Queries"
+
+@enduml

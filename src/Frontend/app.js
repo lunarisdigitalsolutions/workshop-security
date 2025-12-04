@@ -1,5 +1,9 @@
 // Configuration
-const API_BASE_URL = '__API_BASE_URL__';
+let API_BASE_URL = '__API_BASE_URL__';
+if (API_BASE_URL.includes('API_BASE_URL')) {
+    // Default to localhost if not replaced during build
+    API_BASE_URL = 'http://localhost:5200';
+}
 
 // State
 let pizzas = [];
